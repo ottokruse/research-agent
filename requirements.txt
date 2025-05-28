@@ -1,0 +1,6 @@
+generative-ai-toolkit
+prompt_toolkit
+requests
+duckduckgo_search
+bs4
+markdownify
