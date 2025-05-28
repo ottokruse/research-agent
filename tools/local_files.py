@@ -155,113 +155,116 @@ def get_git_tracked_tree(path: str) -> list:
 
     return build_tree(tree, str(rel_root))
 
-
-def patch_file(path: str, patches: list[dict]) -> None:
+def patch_file(
+    path: str,
+    start_line: int,
+    end_line: int,
+    replacement: str,
+    backup: bool = False,
+    dry_run: bool = False
+) -> dict | None:
     """
-    Apply a list of line-based in-place edits to a text file.
-    Prefer this tool for doing updates to files. For example, to change lines in source code files.
-
-    Each patch must specify:
-    - 'start_line': the starting line number (1-based, inclusive) of the current content to replace
-    - 'end_line': the ending line number (1-based, inclusive) of the current content to replace
-    - 'replacement': the string to replace the specified lines with (can contain any number of lines)
-
-    Note that the replacement text can contain a different number of lines than the original range,
-    which will cause the file to expand or contract accordingly.
+    Apply a line-based edit to a text file. Replaces the specified 1-based inclusive line range
+    with the given replacement text. Supports appending, modifying, or deleting content.
 
     Parameters
-    -----
+    ----------
     path : str
-        Path to the file, relative to working directory
-    patches : list of dict
-        List of patches to apply
+        Path to the file, relative to working directory.
+    start_line : int
+        1-based starting line number to replace (inclusive).
+    end_line : int
+        1-based ending line number to replace (inclusive).
+    replacement : str
+        Replacement text. Can be empty (for deletion). Can span multiple lines.
+    backup : bool, optional
+        If True, creates a backup with `.bak` suffix before modifying.
+    dry_run : bool, optional
+        If True, does not write to disk. Returns both original and modified content.
+
+    Returns
+    -------
+    dict | None
+        If dry_run is True, returns {'original': str, 'modified': str}.
+        Otherwise returns None.
 
     Raises
-    -----
-    ValueError
-        If patch format is invalid, or if line numbers are out of range
+    ------
     FileNotFoundError
-        If the specified file doesn't exist
+        If the file does not exist.
+    ValueError
+        If line numbers are invalid or out of bounds.
 
-    Example
-    -------
-    patch_file("example.py", [
-        {
-            "start_line": 5,
-            "end_line": 7,
-            "replacement": "    # The 3 original lines were replaced with 2 new lines\n    return 'Hello, patched world!'\n"
-        },
-        {
-            "start_line": 10,
-            "end_line": 10,
-            "replacement": "# One line expanded to multiple lines\ndef new_function():\n    pass\n"
-        }
-    ])
+    Examples
+    --------
+    # Replace lines 5–7
+    patch_file("main.py", 5, 7, "def new_logic():\n    return True\n")
 
-    Notes
-    -----
-    - Line numbers are 1-based (same as most editors).
-    - The replacement string can contain multiple lines.
-    - Patches are applied from bottom to top of the file to avoid affecting line numbers of pending patches.
-    - Line endings will be preserved according to the replacement text provided.
+    # Append after last line (file has 42 lines)
+    patch_file("main.py", 43, 43, "# new function\ndef f():\n    pass\n")
+
+    # Delete line 10
+    patch_file("main.py", 10, 10, "")
     """
     abs_path = _resolve_path(path)
-
-    # Check if file exists
     if not abs_path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    # Read the file content
-    lines = abs_path.read_text().splitlines(keepends=True)
+    original_content = abs_path.read_text(encoding="utf-8")
+    line_ending = "\r\n" if "\r\n" in original_content else "\n"
+    lines = original_content.splitlines(keepends=True) if original_content else []
+    line_count = len(lines)
 
-    # Validate patches before applying
-    for patch in patches:
-        # Validate required keys
-        required_keys = ["start_line", "end_line", "replacement"]
-        if not all(key in patch for key in required_keys):
-            raise ValueError(f"Patch missing required keys. Required: {required_keys}")
+    if not isinstance(start_line, int) or not isinstance(end_line, int):
+        raise ValueError("Line numbers must be integers")
+    if start_line < 1 or end_line < 1:
+        raise ValueError("Line numbers must be positive")
+    if start_line > end_line:
+        raise ValueError(f"start_line ({start_line}) cannot be greater than end_line ({end_line})")
 
-        start = patch["start_line"]
-        end = patch["end_line"]
+    is_append = start_line == line_count + 1 and end_line == line_count + 1
+    if is_append and start_line != end_line:
+        raise ValueError("When appending, start_line and end_line must be equal")
 
-        # Validate line numbers
-        if not isinstance(start, int) or not isinstance(end, int):
-            raise ValueError("Line numbers must be integers")
+    if not is_append:
+        if start_line > line_count + 1:
+            raise ValueError(f"Start line {start_line} exceeds file length ({line_count})")
+        if end_line > line_count:
+            raise ValueError(f"End line {end_line} exceeds file length ({line_count})")
 
-        if start < 1 or end < 1:
-            raise ValueError("Line numbers must be positive (1-based indexing)")
+    if backup and not dry_run:
+        backup_path = abs_path.with_suffix(abs_path.suffix + ".bak")
+        backup_path.write_text(original_content, encoding="utf-8")
 
-        if start > len(lines) + 1 or (end > len(lines) and start <= len(lines)):
-            raise ValueError(f"Line numbers out of range. File has {len(lines)} lines.")
+    # Normalize replacement and split
+    normalized = replacement.replace("\r\n", "\n").replace("\n", line_ending)
+    replacement_lines = normalized.splitlines(keepends=True) if normalized else []
 
-        if start > end:
-            raise ValueError(
-                f"start_line ({start}) cannot be greater than end_line ({end})"
-            )
+    # Ensure last replacement line has line ending if needed
+    if replacement_lines:
+        # Match the line ending of the file at end_line, or use file's default
+        if not replacement_lines[-1].endswith(("\n", "\r")):
+            if is_append:
+                replacement_lines[-1] += line_ending
+            elif end_line <= line_count:
+                ending = "\r\n" if lines[end_line - 1].endswith("\r\n") else "\n"
+                replacement_lines[-1] += ending
+            else:
+                replacement_lines[-1] += line_ending
 
-    # Sort patches in reverse order of start_line to avoid affecting subsequent patches
-    for patch in sorted(patches, key=lambda p: p["start_line"], reverse=True):
-        start = patch["start_line"] - 1  # Convert to 0-based indexing
-        end = patch["end_line"]  # This is the inclusive end line (1-based)
+    # If appending to non-empty file, ensure previous last line ends cleanly
+    if is_append and lines and not lines[-1].endswith(("\n", "\r")):
+        lines[-1] += line_ending
 
-        # Convert to 0-based indexing for slicing
-        end_0_based = (
-            end - 1 + 1
-        )  # -1 to convert to 0-based, +1 because slices are exclusive at the end
+    # Apply patch
+    start_idx = start_line - 1
+    end_idx = end_line - 1
+    lines[start_idx:end_idx + 1] = replacement_lines
 
-        replacement_text = patch["replacement"]
-        replacement_lines = replacement_text.splitlines(keepends=True)
+    modified_content = "".join(lines)
 
-        # Make sure the replacement has proper line endings if not empty
-        if replacement_lines and not replacement_text.endswith(("\n", "\r")):
-            # Only add a newline if the original last line had one
-            if end_0_based <= len(lines) and lines[end_0_based - 1].endswith(
-                ("\n", "\r")
-            ):
-                replacement_lines[-1] += "\n"
+    if dry_run:
+        return {"original": original_content, "modified": modified_content}
 
-        # Apply the patch
-        lines[start:end_0_based] = replacement_lines
-
-    # Write the changes back to the file
-    abs_path.write_text("".join(lines))
+    abs_path.write_text(modified_content, encoding="utf-8")
+    return None

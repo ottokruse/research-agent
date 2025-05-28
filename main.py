@@ -39,7 +39,7 @@ def main():
         tracer=TeeTracer()
         .add_tracer(InMemoryTracer())
         .add_tracer(ToolInvocationTracer()),
-        max_successive_tool_invocations=20,
+        max_successive_tool_invocations=30,
         # additional_model_request_fields={
         #     "reasoning_config": {"type": "enabled", "budget_tokens": 1024}
         # },
