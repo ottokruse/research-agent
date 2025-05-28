@@ -1,4 +1,4 @@
-#!/Users/ottokrus/git/agent-search/.venv/bin/python
+#!/usr/bin/env python
 
 import os
 
@@ -11,7 +11,13 @@ from prompt_toolkit.formatted_text import HTML
 
 from tools.fetch_html_as_markdown import fetch_html_as_markdown
 from tools.github import fetch_github_file, list_github_folder
-from tools.local_files import list_dir, read_file, write_file
+from tools.local_files import (
+    get_git_tracked_tree,
+    list_dir,
+    patch_file,
+    read_file,
+    write_file,
+)
 from tools.web_search import web_search
 
 
@@ -45,7 +51,9 @@ def main():
     agent.register_tool(web_search)
     agent.register_tool(read_file)
     agent.register_tool(write_file)
+    agent.register_tool(patch_file)
     agent.register_tool(list_dir)
+    agent.register_tool(get_git_tracked_tree)
 
     session = PromptSession()
 

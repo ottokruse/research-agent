@@ -1,4 +1,4 @@
-generative-ai-toolkit
+generative-ai-toolkit[all]
 prompt_toolkit
 requests
 duckduckgo_search
