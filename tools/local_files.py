@@ -12,16 +12,6 @@ def _resolve_path(path: str) -> pathlib.Path:
     -----
     path : str
         The relative or absolute path to resolve
-
-    Returns
-    -----
-    pathlib.Path
-        The resolved absolute path within BASE_DIR
-
-    Raises
-    -----
-    PermissionError
-        If the resolved path is outside of BASE_DIR
     """
     abs_path = (BASE_DIR / path).resolve()
     if not str(abs_path).startswith(str(BASE_DIR)):
@@ -29,27 +19,29 @@ def _resolve_path(path: str) -> pathlib.Path:
     return abs_path
 
 
-def read_file(path: str, seek: int = 0, max_characters: int | None = None) -> str:
+def read_file_lines(path: str) -> list[tuple[int, str]]:
     """
-    Read a (text-based) file from the filesystem, restricted to current working directory and below.
+    Read lines from a text file. All lines read are returned one by one with their line number.
+
+    Line numbers use 1-based indexing. The end_line is exclusive.
 
     Parameters
-    -----
+    ----------
     path : str
-        The path to the file, relative to the current working directory
-    seek : int
-        The number of bytes to seek from the beginning of the file (by default: 0)
-    max_characters : int
-        Read at most this nr of characters from the file (or until EOF). Use this to peek into, but not reed the whole file.
+        Path to the file, relative to the current working directory.
     """
     if not path:
         raise ValueError("File path cannot be empty")
 
     abs_path = _resolve_path(path)
+    result = []
+    current_line = 1  # Start from line 1 (1-based indexing)
 
-    with abs_path.open("r") as f:
-        f.seek(seek)
-        return f.read(max_characters)
+    with abs_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            result.append((current_line, line))
+            current_line += 1
+    return result
 
 
 def write_file(path: str, content: str) -> None:
@@ -86,26 +78,24 @@ def list_dir(path: str) -> list:
     abs_path = _resolve_path(path)
 
     return [
-        {"path": str(p), "type": "dir" if p.is_dir() else "file"}
+        {
+            "path": str(p),
+            "type": "dir" if p.is_dir() else "file",
+            "size_kb": None if p.is_dir() else p.stat().st_size / 1024,
+        }
         for p in abs_path.glob("*")
     ]
 
 
 def get_git_tracked_tree(path: str) -> list:
     """
-    Return a structured directory tree of git-tracked files under the given path,
-    including file sizes.
+    Return a full tree of git-tracked files under the given path,
+    including file sizes in KB.
 
     Parameters
     -----
     path : str
         The path to the directory, relative to the current working directory
-
-    Returns
-    -----
-    list
-        List of dictionaries representing files and directories with 'path', 'type',
-        and optional 'children' or 'size' (in bytes)
     """
     abs_path = _resolve_path(path)
     rel_root = abs_path.relative_to(BASE_DIR)
@@ -139,7 +129,7 @@ def get_git_tracked_tree(path: str) -> list:
                         {
                             "path": str(pathlib.Path(base) / f),
                             "type": "file",
-                            "size": file_path.stat().st_size,
+                            "size_kb": file_path.stat().st_size / 1024,
                         }
                     )
             else:
@@ -155,45 +145,16 @@ def get_git_tracked_tree(path: str) -> list:
 
     return build_tree(tree, str(rel_root))
 
+
 def patch_file(
     path: str,
     start_line: int,
     end_line: int,
     replacement: str,
-    backup: bool = False,
-    dry_run: bool = False
-) -> dict | None:
+) -> dict:
     """
     Apply a line-based edit to a text file. Replaces the specified 1-based inclusive line range
     with the given replacement text. Supports appending, modifying, or deleting content.
-
-    Parameters
-    ----------
-    path : str
-        Path to the file, relative to working directory.
-    start_line : int
-        1-based starting line number to replace (inclusive).
-    end_line : int
-        1-based ending line number to replace (inclusive).
-    replacement : str
-        Replacement text. Can be empty (for deletion). Can span multiple lines.
-    backup : bool, optional
-        If True, creates a backup with `.bak` suffix before modifying.
-    dry_run : bool, optional
-        If True, does not write to disk. Returns both original and modified content.
-
-    Returns
-    -------
-    dict | None
-        If dry_run is True, returns {'original': str, 'modified': str}.
-        Otherwise returns None.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the file does not exist.
-    ValueError
-        If line numbers are invalid or out of bounds.
 
     Examples
     --------
@@ -205,6 +166,17 @@ def patch_file(
 
     # Delete line 10
     patch_file("main.py", 10, 10, "")
+
+    Parameters
+    ----------
+    path : str
+        Path to the file, relative to working directory.
+    start_line : int
+        1-based starting line number to replace (inclusive).
+    end_line : int
+        1-based ending line number to replace (inclusive).
+    replacement : str
+        Replacement text. Can be empty (for deletion). Can span multiple lines.
     """
     abs_path = _resolve_path(path)
     if not abs_path.exists():
@@ -220,7 +192,9 @@ def patch_file(
     if start_line < 1 or end_line < 1:
         raise ValueError("Line numbers must be positive")
     if start_line > end_line:
-        raise ValueError(f"start_line ({start_line}) cannot be greater than end_line ({end_line})")
+        raise ValueError(
+            f"start_line ({start_line}) cannot be greater than end_line ({end_line})"
+        )
 
     is_append = start_line == line_count + 1 and end_line == line_count + 1
     if is_append and start_line != end_line:
@@ -228,13 +202,11 @@ def patch_file(
 
     if not is_append:
         if start_line > line_count + 1:
-            raise ValueError(f"Start line {start_line} exceeds file length ({line_count})")
+            raise ValueError(
+                f"Start line {start_line} exceeds file length ({line_count})"
+            )
         if end_line > line_count:
             raise ValueError(f"End line {end_line} exceeds file length ({line_count})")
-
-    if backup and not dry_run:
-        backup_path = abs_path.with_suffix(abs_path.suffix + ".bak")
-        backup_path.write_text(original_content, encoding="utf-8")
 
     # Normalize replacement and split
     normalized = replacement.replace("\r\n", "\n").replace("\n", line_ending)
@@ -259,12 +231,12 @@ def patch_file(
     # Apply patch
     start_idx = start_line - 1
     end_idx = end_line - 1
-    lines[start_idx:end_idx + 1] = replacement_lines
+    lines[start_idx : end_idx + 1] = replacement_lines
 
     modified_content = "".join(lines)
 
-    if dry_run:
-        return {"original": original_content, "modified": modified_content}
-
     abs_path.write_text(modified_content, encoding="utf-8")
-    return None
+    return {
+        "status": "complete",
+        "message": f"Make sure to re-read {path} before issuing a new patch against this file!",
+    }

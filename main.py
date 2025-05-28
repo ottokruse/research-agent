@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+
 import os
+import textwrap
 
 from generative_ai_toolkit.agent import BedrockConverseAgent
 from generative_ai_toolkit.tracer import BaseTracer, InMemoryTracer, TeeTracer
@@ -15,7 +17,7 @@ from tools.local_files import (
     get_git_tracked_tree,
     list_dir,
     patch_file,
-    read_file,
+    read_file_lines,
     write_file,
 )
 from tools.web_search import web_search
@@ -28,14 +30,27 @@ class ToolInvocationTracer(BaseTracer):
                 HTML(
                     f"<ansiblue>Completed tool invocation:</ansiblue> {trace.attributes.get('ai.tool.name')} {str(trace.attributes.get('ai.tool.input'))[:200]}"
                 ),
-                end="",
             )
 
 
 def main():
+    cwd = os.getcwd()
+    is_git_repository = os.path.isdir(os.path.join(cwd, ".git"))
+
     agent = BedrockConverseAgent(
         model_id="eu.anthropic.claude-3-7-sonnet-20250219-v1:0",
-        system_prompt=f"You are an advanced AI agent. You excel in internet research. You can also read and write local files. The current working directory is: {os.getcwd()}",
+        system_prompt=textwrap.dedent(
+            """
+            You are an advanced AI agent. You excel in internet research.
+            You can also read and write local files.
+            Before writing or making changes to files, you MUST ask the user for their consent.
+            The current working directory is: {cwd}{git_dir}
+            """
+        )
+        .format(
+            cwd=os.getcwd(), git_dir=" (a git repository)" if is_git_repository else ""
+        )
+        .strip(),
         tracer=TeeTracer()
         .add_tracer(InMemoryTracer())
         .add_tracer(ToolInvocationTracer()),
@@ -48,8 +63,9 @@ def main():
     agent.register_tool(fetch_github_file)
     agent.register_tool(list_github_folder)
     agent.register_tool(fetch_html_as_markdown)
+    agent.register_tool(read_file_lines)
     agent.register_tool(web_search)
-    agent.register_tool(read_file)
+    # agent.register_tool(read_file)
     agent.register_tool(write_file)
     agent.register_tool(patch_file)
     agent.register_tool(list_dir)
