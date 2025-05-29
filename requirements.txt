@@ -2,5 +2,5 @@ generative-ai-toolkit[all]
 prompt_toolkit
 requests
 duckduckgo_search
-bs4
+beautifulsoup4
 markdownify
