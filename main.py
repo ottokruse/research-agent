@@ -26,12 +26,29 @@ from tools.web_search import web_search
 class ToolInvocationTracer(BaseTracer):
     def persist(self, trace: Trace):
         if trace.attributes.get("ai.trace.type") == "tool-invocation":
+            tool_name = trace.attributes.get('ai.tool.name')
+            tool_input = trace.attributes.get('ai.tool.input', {})
+            
+            # Print the tool name
             print_formatted_text(
                 HTML(
-                    f"<ansiblue>Completed tool invocation:</ansiblue> {trace.attributes.get('ai.tool.name')} {str(trace.attributes.get('ai.tool.input'))[:200]}"
+                    f"<ansiblue>Completed tool invocation:</ansiblue> {tool_name}"
                 ),
             )
-
+            
+            # Print each input parameter with truncated values
+            if tool_input and isinstance(tool_input, dict):
+                for key, value in tool_input.items():
+                    # Convert value to string and truncate to 100 chars
+                    value_str = str(value)
+                    if len(value_str) > 100:
+                        value_str = value_str[:97] + "..."
+                    
+                    print_formatted_text(
+                        HTML(
+                            f"  <ansiyellow>- {key}:</ansiyellow> {value_str}"
+                        )
+                    )
 
 def main():
     cwd = os.getcwd()
