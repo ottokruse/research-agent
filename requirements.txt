@@ -3,3 +3,4 @@ requests
 duckduckgo_search
 beautifulsoup4
 markdownify
+urllib3[brotli]
