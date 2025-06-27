@@ -4,51 +4,14 @@
 import os
 import textwrap
 
+import boto3
+import botocore
+import botocore.config
 from generative_ai_toolkit.agent import BedrockConverseAgent
-from generative_ai_toolkit.tracer import BaseTracer, InMemoryTracer, TeeTracer
-from generative_ai_toolkit.tracer.trace import Trace
-from generative_ai_toolkit.ui import traces_ui
-from prompt_toolkit import PromptSession, print_formatted_text
-from prompt_toolkit.formatted_text import HTML
+from generative_ai_toolkit.agent.registry import DEFAULT_TOOL_REGISTRY
+from generative_ai_toolkit.ui import chat_ui
 
-from tools.fetch_html_as_markdown import fetch_html_as_markdown
-from tools.github import fetch_github_file, list_github_folder
-from tools.local_files import (
-    apply_multiple_patches,
-    get_git_tracked_tree,
-    list_dir,
-    patch_by_pattern,
-    patch_file,
-    preview_patch,
-    show_line_numbers,
-    write_file,
-)
-from tools.reload_tools import reload_tools
-from tools.web_search import web_search
-
-
-class ToolInvocationTracer(BaseTracer):
-    def persist(self, trace: Trace):
-        if trace.attributes.get("ai.trace.type") == "tool-invocation":
-            tool_name = trace.attributes.get("ai.tool.name")
-            tool_input = trace.attributes.get("ai.tool.input", {})
-
-            # Print the tool name
-            print_formatted_text(
-                HTML(f"<ansiblue>Completed tool invocation:</ansiblue> {tool_name}"),
-            )
-
-            # Print each input parameter with truncated values
-            if tool_input and isinstance(tool_input, dict):
-                for key, value in tool_input.items():
-                    # Convert value to string and truncate to 100 chars
-                    value_str = str(value)
-                    if len(value_str) > 100:
-                        value_str = value_str[:97] + "..."
-
-                    print_formatted_text(
-                        HTML(f"  <ansiyellow>- {key}:</ansiyellow> {value_str}")
-                    )
+import tools
 
 
 def main():
@@ -59,72 +22,60 @@ def main():
         model_id="eu.anthropic.claude-3-7-sonnet-20250219-v1:0",
         system_prompt=textwrap.dedent(
             """
-            You are an advanced AI agent. You excel in internet research.
-            You can also read and write local files.
-            Before writing or making changes to files, you MUST ask the user for their consent.
-            The current working directory is: {cwd}{git_dir}
+            You are an advanced AI agent. You help the user with:
+            
+            - Internet research
+            - Coding
+
+            Use the tools at your disposal to do your job.
+
+            The current local working directory is: {cwd}{git_dir}
+
+            Unless it's obvious they mean a file on GitHub, always presume the user is talking about a local file.
+
+            ALWAYS ask user consent before writing or editing local files!
+
+            ## Using the think tool
+
+            Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to:
+            - Break down complex problems into manageable steps
+            - List the specific rules or constraints that apply to the current task
+            - Check if all required information is available before proceeding
+            - Verify that planned actions comply with all relevant policies
+            - Analyze tool outputs carefully before using the information
+            - Plan the sequence of tool calls needed to complete multi-step tasks
+
+            The think tool helps you organize your reasoning. It doesn't retrieve new information or make changes - it's solely for structured thinking. Use it especially when:
+            - Processing complex outputs from previous tool calls
+            - Following detailed guidelines or policies
+            - Making decisions where mistakes would be costly
+            - Planning a sequence of actions that build on each other
+
+            When using the think tool, be thorough but concise. Structure your thoughts clearly and focus on the specific reasoning needed for the current step.            
             """
         )
         .format(
-            cwd=os.getcwd(), git_dir=" (a git repository)" if is_git_repository else ""
+            cwd=os.getcwd(), git_dir=" (a git tracked dir)" if is_git_repository else ""
         )
         .strip(),
-        tracer=TeeTracer()
-        .add_tracer(InMemoryTracer())
-        .add_tracer(ToolInvocationTracer()),
-        max_successive_tool_invocations=30,
         # additional_model_request_fields={
         #     "reasoning_config": {"type": "enabled", "budget_tokens": 1024}
         # },
+        bedrock_client=boto3.client(
+            "bedrock-runtime",
+            config=botocore.config.Config(read_timeout=6 * 60, tcp_keepalive=True),
+        ),
+        tools=DEFAULT_TOOL_REGISTRY.scan_tools(tools),
     )
 
-    agent.register_tool(fetch_github_file)
-    agent.register_tool(list_github_folder)
-    agent.register_tool(fetch_html_as_markdown)
-    agent.register_tool(web_search)
-    agent.register_tool(show_line_numbers)
-    agent.register_tool(patch_by_pattern)
-    agent.register_tool(preview_patch)
-    agent.register_tool(apply_multiple_patches)
-    agent.register_tool(write_file)
-    agent.register_tool(patch_file)
-    agent.register_tool(list_dir)
-    agent.register_tool(get_git_tracked_tree)
-    agent.register_tool(reload_tools)
+    print("Tools:")
+    print("======")
+    for tool in agent.tools:
+        print(f"- {tool}")
+    print()
 
-    session = PromptSession()
-
-    try:
-        while True:
-
-            user_input = session.prompt(
-                HTML("<ansigreen>User:</ansigreen> "), multiline=True
-            )
-
-            if not user_input.strip():
-                print_formatted_text(HTML("<ansiblue>Exiting ... </ansiblue>"))
-                break
-
-            print_formatted_text(
-                HTML("<ansimagenta>Agent:</ansimagenta> "), end="", flush=True
-            )
-            print("...", end="", flush=True)
-
-            first_chunk = True
-            for chunk in agent.converse_stream(user_input):
-                if first_chunk:
-                    print(
-                        "\b\b\b   \b\b\b", end="", flush=True
-                    )  # backspace + overwrite "..."
-                    first_chunk = False
-                print_formatted_text(chunk, end="")
-            print_formatted_text()
-
-    except (KeyboardInterrupt, EOFError):
-        print_formatted_text(HTML("<br/><ansiblue>Exiting ... </ansiblue>"))
-
-    demo = traces_ui(agent.traces)
-    demo.launch()
+    demo = chat_ui(agent)
+    demo.launch(inbrowser=True)
 
 
 if __name__ == "__main__":

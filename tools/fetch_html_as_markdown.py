@@ -1,5 +1,8 @@
+import re
+
 import requests
 from bs4 import BeautifulSoup
+from generative_ai_toolkit.agent import registry
 from markdownify import markdownify
 
 # Global session object to maintain cookies across requests
@@ -15,17 +18,20 @@ def _clean_html(html: str):
 
     # Optionally, remove inline JS event handlers (like onclick)
     for tag in soup.find_all():
-        for attr in list(tag.attrs):
+        for attr in list(tag.attrs):  # type: ignore
             if attr.lower().startswith("on"):
-                del tag.attrs[attr]
+                del tag.attrs[attr]  # type: ignore
 
     clean_html = str(soup)
     return clean_html
 
 
-def fetch_html_as_markdown(url: str) -> str:
+@registry.tool
+def fetch_html_as_markdown(url: str, page: int = 1):
     """
     Fetch a web page and return it in markdown format.
+
+    Output will be truncated to max 10,000 characters.
 
     This tool works on HTML and XHTML pages.
 
@@ -33,6 +39,8 @@ def fetch_html_as_markdown(url: str) -> str:
     ------
     url : str
         The URL to fetch, e.g.: https://example.org, https://example.org/path/to, https://example.org/path/to/file.html
+    page : int
+        The next page nr to request, in case the previous request was truncated.
     """
     # Add comprehensive browser-like headers to avoid bot detection
     headers = {
@@ -53,33 +61,61 @@ def fetch_html_as_markdown(url: str) -> str:
         "Sec-Ch-Ua-Platform": '"Windows"',
     }
 
-    # Use the session object to maintain cookies across requests
-    response = _session.get(url, headers=headers, allow_redirects=True)
-    content_type = response.headers.get("Content-Type", "")
+    try:
+        # Use the session object to maintain cookies across requests
+        response = _session.get(url, headers=headers, allow_redirects=True)
+        content_type = response.headers.get("Content-Type", "")
 
-    if "text/html" not in content_type and "application/xhtml+xml" not in content_type:
-        raise ValueError(f"Unsupported content type: {content_type}")
+        # Improved content type checking - use regex to match base content type
+        if not (
+            re.search(r"text/html", content_type, re.I)
+            or re.search(r"application/xhtml\+xml", content_type, re.I)
+        ):
+            return f"Error: Unsupported content type: {content_type}. Cannot convert to markdown."
 
-    html_content = response.text
-    markdown_content = markdownify(
-        _clean_html(html_content),
-        convert=[
-            "a",
-            "p",
-            "h1",
-            "h2",
-            "h3",
-            "h4",
-            "h5",
-            "h6",
-            "ul",
-            "ol",
-            "li",
-            "strong",
-            "em",
-            "blockquote",
-        ],
-        images_inline=False,
-    )
+        # Check if response content appears to be binary/non-text
+        try:
+            # Try to decode a sample of the content to check if it's text
+            sample = response.content[:1000]
+            sample.decode(response.encoding or "utf-8")
+        except UnicodeDecodeError:
+            return "Error: Content appears to be binary data, not text/HTML. Cannot convert to markdown."
 
-    return markdown_content
+        # Get the text content with proper encoding
+        html_content = response.text
+
+        # Check if content is actually HTML (basic validation)
+        if not re.search(r"<html|<body|<div|<p|<h[1-6]|<!DOCTYPE", html_content, re.I):
+            return "Error: Content doesn't appear to be valid HTML. Cannot convert to markdown."
+
+        markdown_content = markdownify(
+            _clean_html(html_content),
+            convert=[
+                "a",
+                "p",
+                "h1",
+                "h2",
+                "h3",
+                "h4",
+                "h5",
+                "h6",
+                "ul",
+                "ol",
+                "li",
+                "strong",
+                "em",
+                "blockquote",
+            ],
+            images_inline=False,
+        )
+
+        if len(markdown_content) <= 10_000:
+            return markdown_content
+
+        start_pos = (page - 1) * 10_000
+        return (
+            markdown_content[start_pos : start_pos + 10_000]
+            + f"\n\n[... truncated, next page: {page + 1} ...]"
+        )
+    except Exception as e:
+        return f"Error fetching or processing URL: {str(e)}"

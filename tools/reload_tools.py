@@ -1,7 +1,10 @@
 import importlib
 import sys
 
+from generative_ai_toolkit.agent import registry
 
+
+@registry.tool
 def reload_tools():
     """
     Reloads all tool modules to apply code changes without restarting the agent.
@@ -21,5 +24,6 @@ def reload_tools():
             reloaded_modules.append(module_name)
         except Exception as e:
             return f"Failed to reload {module_name}: {str(e)}"
+
 
     return f"Successfully reloaded {len(reloaded_modules)} modules: {', '.join(reloaded_modules)}"

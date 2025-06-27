@@ -1,6 +1,8 @@
 from duckduckgo_search import DDGS
+from generative_ai_toolkit.agent import registry
 
 
+@registry.tool
 def web_search(query: str, max_results: int = 3) -> list:
     """
     Perform a web search.
