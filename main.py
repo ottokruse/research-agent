@@ -19,7 +19,8 @@ def main():
     is_git_repository = os.path.isdir(os.path.join(cwd, ".git"))
 
     agent = BedrockConverseAgent(
-        model_id="eu.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        # model_id="eu.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        model_id="eu.anthropic.claude-sonnet-4-20250514-v1:0",
         system_prompt=textwrap.dedent(
             """
             You are an advanced AI agent. You help the user with:
