@@ -27,9 +27,9 @@ def _clean_html(html: str):
 
 
 @registry.tool
-def fetch_html_as_markdown(url: str, page: int = 1):
+def fetch_html(url: str, page: int = 1, format: str = "md"):
     """
-    Fetch a web page and return it in markdown format.
+    Fetch a web page and return it in either markdown (default) or raw HTML format.
 
     Output will be truncated to max 10,000 characters.
 
@@ -41,6 +41,8 @@ def fetch_html_as_markdown(url: str, page: int = 1):
         The URL to fetch, e.g.: https://example.org, https://example.org/path/to, https://example.org/path/to/file.html
     page : int
         The next page nr to request, in case the previous request was truncated.
+    format : str, optional
+        The return format, either "md" or "html", default "md"
     """
     # Add comprehensive browser-like headers to avoid bot detection
     headers = {
@@ -88,33 +90,38 @@ def fetch_html_as_markdown(url: str, page: int = 1):
         if not re.search(r"<html|<body|<div|<p|<h[1-6]|<!DOCTYPE", html_content, re.I):
             return "Error: Content doesn't appear to be valid HTML. Cannot convert to markdown."
 
-        markdown_content = markdownify(
-            _clean_html(html_content),
-            convert=[
-                "a",
-                "p",
-                "h1",
-                "h2",
-                "h3",
-                "h4",
-                "h5",
-                "h6",
-                "ul",
-                "ol",
-                "li",
-                "strong",
-                "em",
-                "blockquote",
-            ],
-            images_inline=False,
-        )
+        if format == "md":
 
-        if len(markdown_content) <= 10_000:
-            return markdown_content
+            content = markdownify(
+                _clean_html(html_content),
+                convert=[
+                    "a",
+                    "p",
+                    "h1",
+                    "h2",
+                    "h3",
+                    "h4",
+                    "h5",
+                    "h6",
+                    "ul",
+                    "ol",
+                    "li",
+                    "strong",
+                    "em",
+                    "blockquote",
+                ],
+                images_inline=False,
+            )
+
+        else:
+            content = html_content
+
+        if len(content) <= 10_000:
+            return content
 
         start_pos = (page - 1) * 10_000
         return (
-            markdown_content[start_pos : start_pos + 10_000]
+            content[start_pos : start_pos + 10_000]
             + f"\n\n[... truncated, next page: {page + 1} ...]"
         )
     except Exception as e:

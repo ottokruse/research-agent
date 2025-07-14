@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 
+import datetime
 import os
 import textwrap
 
@@ -31,6 +32,8 @@ def main():
 
             Use the tools at your disposal to do your job.
 
+            The current date is: {date}
+
             ## Research
 
             During your research you may suggest open-source projects to the user. Favor popular and established projects, with recent commits.
@@ -43,7 +46,8 @@ def main():
 
             ### Writing local files
 
-            ONLY write to local files if instructed by the user explicitly!
+            NEVER assume the user wants you to write files! It is more likely they want to see your proposal first, before writing to disk.
+            ONLY write files if instructed by the user **explicitly**, i.e. when they use the word "write" or "create", or say "yes" when you ask them if you should write the file(s).
 
             ## Using the think tool
 
@@ -65,7 +69,9 @@ def main():
             """
         )
         .format(
-            cwd=os.getcwd(), git_dir=" (a git tracked dir)" if is_git_repository else ""
+            cwd=os.getcwd(),
+            git_dir=" (a git tracked dir)" if is_git_repository else "",
+            date=datetime.datetime.now().strftime("%A, %B %d, %Y at %I:%M %p"),
         )
         .strip(),
         # additional_model_request_fields={
