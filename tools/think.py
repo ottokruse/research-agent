@@ -1,7 +1,9 @@
 from generative_ai_toolkit.agent import registry
 
+from tools.registries import thinking
 
-@registry.tool
+
+@registry.tool(tool_registry=thinking)
 def think(thought: str) -> None:
     """
     Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed.

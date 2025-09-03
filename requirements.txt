@@ -1,8 +1,8 @@
 generative-ai-toolkit[all]
 requests
-duckduckgo_search
 beautifulsoup4
 markdownify
 urllib3[brotli]
-pypdf
-python-docx
+pyyaml
+boto3
+boto3-stubs[bedrock-runtime,dynamodb]

@@ -1,6 +1,6 @@
 # AI-powered Research Assistant
 
-Kinda like OpenAI's Deep Research, but simpler, and your own. Also enhanced with local filesystem access.
+Kinda like OpenAI's Deep Research, but way simpler, and your own. Also enhanced with local filesystem access.
 
 Built with [Generative AI Toolkit](https://github.com/awslabs/generative-ai-toolkit/).
 
@@ -18,6 +18,8 @@ Built with [Generative AI Toolkit](https://github.com/awslabs/generative-ai-tool
 - [Uv](https://github.com/astral-sh/uv) (Python package installer, recommended)
 - AWS Bedrock access (for Claude 3.7 Sonnet)
 - AWS credentials properly configured
+- Brave Search API key (you can use the default Brave search plan, which requires a CC registered but is free of charge)
+- GutHub token
 
 ## Installation
 
@@ -32,6 +34,15 @@ source .venv/bin/activate
 
 # Install dependencies
 uv pip install -r requirements.txt
+```
+
+## Environment
+
+Populate your Brave Search API key and GitHub token into the environment:
+
+```shell
+export BRAVE_SEARCH_API_KEY=your_brave_search_api_key_here
+export GITHUB_TOKEN=your_github_token_here
 ```
 
 ## Usage
@@ -51,7 +62,7 @@ That will spawn a web ui (see screenshot below) and open your browser so you can
 Add this to your .zshrc so you can quickly spawn the UI with `qq`:
 
 ```shell
-alias qq="AWS_PROFILE=<isengardprofile> AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_SESSION_TOKEN= GITHUB_TOKEN=<token> /<path>/<to>/research-agent/main.sh"
+alias qq="AWS_PROFILE=<isengardprofile> AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_SESSION_TOKEN= GITHUB_TOKEN=<token> BRAVE_SEARCH_API_KEY=<key> /<path>/<to>/research-agent/main.sh"
 ```
 
 ## UI Screenshot

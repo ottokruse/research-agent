@@ -6,8 +6,10 @@ import requests
 import yaml
 from generative_ai_toolkit.agent import registry
 
+from tools.registries import web_research
 
-@registry.tool
+
+@registry.tool(tool_registry=web_research)
 def fetch_github_file(repo_url: str, file_path: str, branch: str | None = None) -> str:
     """
     Fetches the content of a specified file from a repository on GitHub.
@@ -49,7 +51,7 @@ def fetch_github_file(repo_url: str, file_path: str, branch: str | None = None) 
     return resp.text
 
 
-@registry.tool
+@registry.tool(tool_registry=web_research)
 def list_github_folder(
     repo_url: str, folder_path: str = "", branch: str | None = None
 ) -> list[dict]:
@@ -90,7 +92,7 @@ def list_github_folder(
     return resp.json()
 
 
-@registry.tool
+@registry.tool(tool_registry=web_research)
 def fetch_github_notebook(
     repo_url: str, file_path: str, branch: str | None = None
 ) -> str:
@@ -157,7 +159,7 @@ def fetch_github_notebook(
         raise ValueError(f"The file '{file_path}' is not a valid Jupyter notebook.")
 
 
-@registry.tool
+@registry.tool(tool_registry=web_research)
 def fetch_pr_data_yaml(pr_url: str) -> str:
     """
     Given a GitHub pull request URL, returns a YAML string with:

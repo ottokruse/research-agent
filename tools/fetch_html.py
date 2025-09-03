@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 from generative_ai_toolkit.agent import registry
 from markdownify import markdownify
 
+from tools.registries import web_research
+
 # Global session object to maintain cookies across requests
 _session = requests.Session()
 
@@ -26,7 +28,7 @@ def _clean_html(html: str):
     return clean_html
 
 
-@registry.tool
+@registry.tool(tool_registry=web_research)
 def fetch_html(url: str, page: int = 1, format: str = "md"):
     """
     Fetch a web page and return it in either markdown (default) or raw HTML format.
@@ -110,7 +112,6 @@ def fetch_html(url: str, page: int = 1, format: str = "md"):
                     "em",
                     "blockquote",
                 ],
-                images_inline=False,
             )
 
         else:
