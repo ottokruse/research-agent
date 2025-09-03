@@ -25,9 +25,12 @@ from tools.registries import (
 ToolRegistry.recursive_import(tools)
 
 # Pick one of the LLMs from this list: https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html
+# For example:
+model_id = "eu.mistral.pixtral-large-2502-v1:0"
 model_id = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
 
-# Not all LLMs support streaming responses with tools
+# Not all model ids support streaming responses with tools.
+# If that's the case for the model id you picked, set the following to "converse":
 converse_implementation: Literal["converse", "converse-stream"] = "converse-stream"
 
 cwd = os.getcwd()
