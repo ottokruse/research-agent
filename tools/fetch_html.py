@@ -111,6 +111,7 @@ def fetch_html(url: str, page: int = 1, format: str = "md"):
                     "strong",
                     "em",
                     "blockquote",
+                    "img",
                 ],
             )
 

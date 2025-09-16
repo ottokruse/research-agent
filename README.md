@@ -32,7 +32,7 @@ The [Gradio](https://www.gradio.app/) based UI is perfectly capable of rendering
 
 ## Multi-agent approach
 
-The agent consists of a supervisor agent that is great in coding itself, has a think tool to help it think, and can hand off tasks to its subagents:
+The agent consists of a supervisor agent that is great in coding itself, and can hand off tasks to its subagents:
 
 ```mermaid
 graph TD
@@ -40,39 +40,42 @@ graph TD
     UI --> Orchestrator[🎯 Orchestrator Agent]
 
     Orchestrator --> Think[🧠 think]
+    Orchestrator --> WriteFile[✏️ write_file]
+    Orchestrator --> ReadFile[📖 read_file]
     Orchestrator -.-> FilesAgent[📁 Local Files Agent]
     Orchestrator -.-> WebAgent[🌐 Web Research Agent]
 
     WebAgent --> WebSearch[🔍 web_search]
     WebAgent --> FetchHTML[📄 fetch_html]
-    WebAgent --> GitHubFile[📂 fetch_github_file]
-    WebAgent --> GitHubFolder[📂 list_github_folder]
-    WebAgent --> GitHubNotebook[📓 fetch_github_notebook]
-    WebAgent --> PRData[🔀 fetch_pr_data_yaml]
+    WebAgent --> FetchGitHubFile[📂 fetch_github_file]
+    WebAgent --> ListGitHubFolder[📂 list_github_folder]
+    WebAgent --> FetchGitHubNotebook[📓 fetch_github_notebook]
+    WebAgent --> FetchPRDataYaml[🔀 fetch_pr_data_yaml]
 
-    FilesAgent --> WriteFile[✏️ write_file]
-    FilesAgent --> ReadFile[📖 read_file]
+    FilesAgent --> WriteFileLocal[✏️ write_file]
+    FilesAgent --> ReadFileLocal[📖 read_file]
     FilesAgent --> ListDir[📋 list_dir]
     FilesAgent --> GitTree[🌳 get_git_tracked_tree]
+    FilesAgent --> InspectGitChanges[🔍 inspect_git_changes]
 
     %% Styling for better contrast in both light and dark modes
     classDef agentClass fill:#4a90e2,color:#ffffff,stroke:#2c5282,stroke-width:2px
     classDef toolClass fill:#e2e8f0,color:#2d3748,stroke:#4a5568,stroke-width:1px
 
     class Orchestrator,WebAgent,FilesAgent agentClass
-    class Think,WebSearch,FetchHTML,GitHubFile,GitHubFolder,GitHubNotebook,PRData,WriteFile,ReadFile,ListDir,GitTree toolClass
+    class Think,WebSearch,FetchHTML,FetchGitHubFile,ListGitHubFolder,FetchGitHubNotebook,FetchPRDataYaml,WriteFile,ReadFile,WriteFileLocal,ReadFileLocal,ListDir,GitTree,InspectGitChanges toolClass
 ```
 
 ## Requirements
 
 - Python 3.13+
 - [Uv](https://github.com/astral-sh/uv) (Python package installer, recommended)
-- Amazon Bedrock and Amazon DynamoDB
-  - Amazon Bedrock for access to a Large Language Model (see exact model used in [main.py](./main.py))
-  - Amazon DynamoDB for storing conversation history and traces
+- Amazon Bedrock access for Large Language Model (currently using Claude 4 Sonnet: `eu.anthropic.claude-sonnet-4-20250514-v1:0`)
 - Brave Search API key
   - You can use the default Brave search plan, which requires a CC registered but is free of charge
 - GitHub token
+- **Optional**: Amazon DynamoDB for persistent conversation history and traces
+  - If not configured, the agent will use SQLite for local storage
 
 ## Installation
 
@@ -89,11 +92,13 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
-## DynamoDB
+## Storage Options
 
-Conversation history and traces are stored in a DynamoDB table.
+The agent supports two storage backends for conversation history and traces:
 
-Create this table as follows:
+### Option 1: DynamoDB (Recommended for production)
+
+Create a DynamoDB table as follows:
 
 ```shell
 aws dynamodb create-table \
@@ -102,20 +107,29 @@ aws dynamodb create-table \
     AttributeName=pk,AttributeType=S \
     AttributeName=sk,AttributeType=S \
     AttributeName=conversation_id,AttributeType=S \
+    AttributeName=updated_at,AttributeType=S \
   --key-schema \
     AttributeName=pk,KeyType=HASH \
     AttributeName=sk,KeyType=RANGE \
   --billing-mode PAY_PER_REQUEST \
-  --global-secondary-indexes '[{"IndexName":"by_conversation_id","KeySchema":[{"AttributeName":"conversation_id","KeyType":"HASH"},{"AttributeName":"sk","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}}]'
+  --global-secondary-indexes '[{"IndexName":"by_conversation_id","KeySchema":[{"AttributeName":"conversation_id","KeyType":"HASH"},{"AttributeName":"sk","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}},{"IndexName":"by_updated_at","KeySchema":[{"AttributeName":"pk","KeyType":"HASH"},{"AttributeName":"updated_at","KeyType":"RANGE"}],"Projection":{"ProjectionType":"ALL"}}]'
 ```
+
+### Option 2: SQLite (Default fallback)
+
+If you don't configure DynamoDB, the agent will automatically use SQLite for local storage. No additional setup required.
 
 ## Environment
 
-Populate your Brave Search API key and GitHub token into the environment:
+Set up the required environment variables:
 
 ```shell
+# Required
 export BRAVE_SEARCH_API_KEY=your_brave_search_api_key_here
 export GITHUB_TOKEN=your_github_token_here
+
+# Optional: For DynamoDB storage (if not set, SQLite will be used)
+export RESEARCH_AGENT_DDB_TABLE_NAME=research-agent
 ```
 
 Ensure you have valid AWS credentials in the usual place where boto3 can find them, for example:
@@ -146,5 +160,9 @@ That will spawn a web ui (see screenshot above) and open your browser so you can
 Add this to your .zshrc so you can quickly spawn the UI with `qq`:
 
 ```shell
-alias qq="AWS_PROFILE=<profile> AWS_ACCESS_KEY_ID= AWS_SECRET_ACCESS_KEY= AWS_SESSION_TOKEN= GITHUB_TOKEN=<token> BRAVE_SEARCH_API_KEY=<key> /<path>/<to>/research-agent/main.sh"
+# With DynamoDB
+alias qq="AWS_PROFILE=<profile> GITHUB_TOKEN=<token> BRAVE_SEARCH_API_KEY=<key> RESEARCH_AGENT_DDB_TABLE_NAME=research-agent /<path>/<to>/research-agent/main.sh"
+
+# With SQLite (local storage)
+alias qq="AWS_PROFILE=<profile> GITHUB_TOKEN=<token> BRAVE_SEARCH_API_KEY=<key> /<path>/<to>/research-agent/main.sh"
 ```
