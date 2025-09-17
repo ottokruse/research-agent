@@ -1,6 +1,6 @@
 # AI-powered Research Assistant
 
-A simple yet effective research agent that is fully under your control. It comes packed with a Web UI, and offers full insight into what it's doing and which sources it's consulting (using OpenTelemetry traces). The agent can browse the web and access local files.
+A simple yet effective research agent that is fully under your control. It comes packed with a Web UI, and offers full insight into what it's doing and which sources it's consulting (using OpenTelemetry traces). The agent can browse the web, analyze GitHub repositories and review GitHub PRs, and access local files.
 
 Built with [Generative AI Toolkit](https://github.com/awslabs/generative-ai-toolkit/) and [Gradio](https://www.gradio.app/).
 
@@ -70,7 +70,7 @@ graph TD
 
 - Python 3.13+
 - [Uv](https://github.com/astral-sh/uv) (Python package installer, recommended)
-- Amazon Bedrock access for Large Language Model (currently using Claude 4 Sonnet: `eu.anthropic.claude-sonnet-4-20250514-v1:0`)
+- Amazon Bedrock access for Large Language Model access (currently using Claude 4 Sonnet; switching to [one of the other models supported by Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html) just requires a one line change [here](/main.py))
 - Brave Search API key
   - You can use the default Brave search plan, which requires a CC registered but is free of charge
 - GitHub token
@@ -117,7 +117,7 @@ aws dynamodb create-table \
 
 ### Option 2: SQLite (Default fallback)
 
-If you don't configure DynamoDB, the agent will automatically use SQLite for local storage. No additional setup required.
+If you don't configure DynamoDB, the agent will automatically use SQLite for local storage. No additional setup required. As you run the agent, you'll see a file `conversations.db` appear in your current working directory.
 
 ## Environment
 
@@ -160,7 +160,7 @@ That will spawn a web ui (see screenshot above) and open your browser so you can
 Add this to your .zshrc so you can quickly spawn the UI with `qq`:
 
 ```shell
-# With DynamoDB
+# With DynamoDB (specify RESEARCH_AGENT_DDB_TABLE_NAME)
 alias qq="AWS_PROFILE=<profile> GITHUB_TOKEN=<token> BRAVE_SEARCH_API_KEY=<key> RESEARCH_AGENT_DDB_TABLE_NAME=research-agent /<path>/<to>/research-agent/main.sh"
 
 # With SQLite (local storage)

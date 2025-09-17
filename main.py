@@ -3,6 +3,7 @@
 
 import datetime
 import os
+import subprocess
 import textwrap
 from typing import Literal
 
@@ -45,7 +46,14 @@ model_id = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
 converse_implementation: Literal["converse", "converse-stream"] = "converse-stream"
 
 cwd = os.getcwd()
-is_git_repo = os.path.isdir(os.path.join(cwd, ".git"))
+is_git_repo = (
+    subprocess.call(
+        ["git", "-C", cwd, "rev-parse"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    == os.EX_OK
+)
 now = datetime.datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
 boto_session = boto3.Session()
 bedrock_client = boto_session.client(
@@ -132,7 +140,7 @@ def agent():
 
             It's usually best to confirm your answers are up-to-date by using the Web Research Agent. Answer questions that you know an up-to-date answer to straight away.
 
-            The current date is: {now}
+            The current date and time are: {now}
 
             The user's platform is Mac OS 15.6.1
 
@@ -201,7 +209,7 @@ def agent():
             """
             You are an advanced Web Research Agent with capabilities for intelligent web searching and document analysis. Your primary goal is to provide comprehensive, accurate, and up-to-date information through efficient parallel research strategies.
 
-            The current date is: {now}
+            The current date and time are: {now}
 
             The user's platform is Mac OS 15.6.1
 
@@ -229,7 +237,27 @@ def agent():
             "properties": {
                 "inquiry_description": {
                     "type": "string",
-                    "description": "A detailed description of what the user wants to know, and hopes to find the answer for on the web",
+                    "description": textwrap.dedent(
+                        """
+                        A description of what the user wants to know, and hopes to find the answer for on the web.
+
+                        Provide a detailed description for deep inquiries.
+                        """
+                    ).strip(),
+                },
+                "inquiry_depth": {
+                    "type": "string",
+                    "description": textwrap.dedent(
+                        """
+                        A textual description of how much effort you want the web research agent to spend.
+
+                        Examples:
+
+                          - "Do a quick lookup, this should be one of the top hits on Brave search"
+                          - "I want a good enough answer, favor answer speed over answer completeness"
+                          - "Please dig deep for me, I want to have an exact answer"
+                        """
+                    ).strip(),
                 },
             },
             "required": ["inquiry_description"],
@@ -239,6 +267,7 @@ def agent():
         conversation_history=conversation_history("web-research"),
         bedrock_client=bedrock_client,
     )
+    web_research_agent.register_tool(tools.local_files.write_file)
 
     local_files_agent = BedrockConverseAgent(
         # model_id="eu.anthropic.claude-3-7-sonnet-20250219-v1:0",
@@ -247,7 +276,7 @@ def agent():
             """
             You are an advanced AI agent for reading and editing local files.
 
-            The current date is: {now}
+            The current date and time are: {now}
 
             The user's platform is Mac OS 15.6.1
 
