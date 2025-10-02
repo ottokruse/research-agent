@@ -100,8 +100,8 @@ def inspect_git_changes(
     result = {
         "branch_info": {},
         "committed_changes": [],
-        "staged_changes": [],
-        "unstaged_changes": [],
+        "staged_changes": {},
+        "unstaged_changes": {},
         "summary": {},
     }
 

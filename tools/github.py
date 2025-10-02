@@ -165,6 +165,8 @@ def fetch_pr_data_yaml(pr_url: str) -> str:
     Given a GitHub pull request URL, returns a YAML string with:
       comments: list of all issue & review comments
       diff: the raw unified diff string
+      status: PR status information (state, merged, etc.)
+      workflows: CI/CD workflow runs and their status/logs
 
     Parameters
     ---
@@ -183,13 +185,28 @@ def fetch_pr_data_yaml(pr_url: str) -> str:
     if "GITHUB_TOKEN" in os.environ:
         headers["Authorization"] = f'token {os.environ["GITHUB_TOKEN"]}'
 
-    # 1) Fetch PR metadata (title & description)
+    # 1) Fetch PR metadata (title, description, and status info)
     meta_url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{number}"
     resp = requests.get(meta_url, headers=headers)
     resp.raise_for_status()
     pr_meta = resp.json()
+
     title = pr_meta.get("title", "")
     description = pr_meta.get("body", "")
+    head_sha = pr_meta.get("head", {}).get("sha", "")
+
+    # Extract status information
+    status_info = {
+        "state": pr_meta.get("state", ""),  # open, closed
+        "merged": pr_meta.get("merged", False),
+        "mergeable": pr_meta.get("mergeable"),
+        "mergeable_state": pr_meta.get("mergeable_state", ""),
+        "draft": pr_meta.get("draft", False),
+        "created_at": pr_meta.get("created_at", ""),
+        "updated_at": pr_meta.get("updated_at", ""),
+        "merged_at": pr_meta.get("merged_at"),
+        "closed_at": pr_meta.get("closed_at"),
+    }
 
     # helper to simplify comments
     def simplify(comments):
@@ -225,10 +242,150 @@ def fetch_pr_data_yaml(pr_url: str) -> str:
     resp.raise_for_status()
     diff_text = resp.text
 
+    # 5) Fetch workflow runs for the PR's head commit
+    workflows_info = []
+    if head_sha:
+        try:
+            # Get workflow runs for the head commit
+            runs_url = f"https://api.github.com/repos/{owner}/{repo}/actions/runs"
+            params = {"head_sha": head_sha, "per_page": 100}
+            resp = requests.get(runs_url, headers=headers, params=params)
+            resp.raise_for_status()
+            runs_data = resp.json()
+
+            for run in runs_data.get("workflow_runs", []):
+                workflow_info = {
+                    "id": run.get("id"),
+                    "name": run.get("name"),
+                    "status": run.get("status"),  # queued, in_progress, completed
+                    "conclusion": run.get(
+                        "conclusion"
+                    ),  # success, failure, cancelled, etc.
+                    "workflow_file": run.get("path", "").replace(
+                        ".github/workflows/", ""
+                    ),
+                    "created_at": run.get("created_at"),
+                    "updated_at": run.get("updated_at"),
+                    "run_number": run.get("run_number"),
+                    "html_url": run.get("html_url"),
+                }
+
+                # Fetch jobs for this workflow run to get more detailed status
+                jobs_url = f"https://api.github.com/repos/{owner}/{repo}/actions/runs/{run.get('id')}/jobs"
+                try:
+                    jobs_resp = requests.get(jobs_url, headers=headers)
+                    jobs_resp.raise_for_status()
+                    jobs_data = jobs_resp.json()
+
+                    workflow_info["jobs"] = []
+                    for job in jobs_data.get("jobs", []):
+                        job_info = {
+                            "name": job.get("name"),
+                            "status": job.get("status"),
+                            "conclusion": job.get("conclusion"),
+                            "started_at": job.get("started_at"),
+                            "completed_at": job.get("completed_at"),
+                        }
+
+                        # Get job steps for more detail
+                        steps = []
+                        for step in job.get("steps", []):
+                            steps.append(
+                                {
+                                    "name": step.get("name"),
+                                    "status": step.get("status"),
+                                    "conclusion": step.get("conclusion"),
+                                    "number": step.get("number"),
+                                }
+                            )
+                        job_info["steps"] = steps
+                        workflow_info["jobs"].append(job_info)
+
+                except requests.RequestException:
+                    # If we can't fetch jobs, continue without them
+                    workflow_info["jobs"] = []
+
+                # Try to fetch logs summary (first few lines) for failed runs
+                if run.get("conclusion") in ["failure", "cancelled"]:
+                    try:
+                        logs_url = f"https://api.github.com/repos/{owner}/{repo}/actions/runs/{run.get('id')}/logs"
+                        logs_resp = requests.get(logs_url, headers=headers)
+                        if logs_resp.status_code == 200:
+                            # Note: This returns a ZIP file, so we just note that logs are available
+                            workflow_info["logs_available"] = True
+                        else:
+                            workflow_info["logs_available"] = False
+                    except requests.RequestException:
+                        workflow_info["logs_available"] = False
+                else:
+                    workflow_info["logs_available"] = False
+
+                workflows_info.append(workflow_info)
+
+        except requests.RequestException as e:
+            # If workflow fetching fails, continue without workflows
+            workflows_info = [{"error": f"Failed to fetch workflows: {str(e)}"}]
+
+    # 6) Fetch status checks for the commit
+    status_checks = []
+    if head_sha:
+        try:
+            # Get status checks
+            status_url = (
+                f"https://api.github.com/repos/{owner}/{repo}/commits/{head_sha}/status"
+            )
+            resp = requests.get(status_url, headers=headers)
+            resp.raise_for_status()
+            status_data = resp.json()
+
+            overall_status = {
+                "state": status_data.get("state"),  # pending, success, error, failure
+                "total_count": status_data.get("total_count"),
+            }
+
+            status_checks.append({"overall": overall_status})
+
+            # Get individual status checks
+            for status in status_data.get("statuses", []):
+                status_checks.append(
+                    {
+                        "context": status.get("context"),
+                        "state": status.get("state"),
+                        "description": status.get("description"),
+                        "target_url": status.get("target_url"),
+                        "created_at": status.get("created_at"),
+                    }
+                )
+
+            # Get check runs (newer status checks API)
+            check_runs_url = f"https://api.github.com/repos/{owner}/{repo}/commits/{head_sha}/check-runs"
+            resp = requests.get(check_runs_url, headers=headers)
+            resp.raise_for_status()
+            check_runs_data = resp.json()
+
+            for check in check_runs_data.get("check_runs", []):
+                status_checks.append(
+                    {
+                        "name": check.get("name"),
+                        "status": check.get("status"),
+                        "conclusion": check.get("conclusion"),
+                        "started_at": check.get("started_at"),
+                        "completed_at": check.get("completed_at"),
+                        "html_url": check.get("html_url"),
+                    }
+                )
+
+        except requests.RequestException:
+            # If status checks fail, continue without them
+            status_checks = [{"error": "Failed to fetch status checks"}]
+
     payload = {
         "title": title,
         "description": description,
+        "status": status_info,
         "comments": simplify(issue_comments) + simplify(review_comments),
         "diff": diff_text,
+        "workflows": workflows_info,
+        "status_checks": status_checks,
     }
     return yaml.safe_dump(payload, sort_keys=False)

@@ -39,7 +39,7 @@ ToolRegistry.recursive_import(tools)
 # Pick one of the LLMs from this list: https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html
 # For example:
 model_id = "eu.mistral.pixtral-large-2502-v1:0"
-model_id = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+model_id = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 # Not all model ids support streaming responses with tools.
 # If that's the case for the model id you picked, set the following to "converse":
@@ -89,11 +89,7 @@ def tracer(identifier: str):
         )
     else:
         main_tracer = SqliteTracer(identifier=identifier)
-    return (
-        TeeTracer()
-        .add_tracer(main_tracer)
-        .add_tracer(HumanReadableTracer(snapshot_enabled=True))
-    )
+    return TeeTracer().add_tracer(main_tracer).add_tracer(HumanReadableTracer())
 
 
 def conversation_history(identifier: str):
@@ -147,6 +143,10 @@ def agent():
             The current local working directory is: {cwd}
 
             {prime_directive}
+
+            ## Be to the point
+
+            When the user asks you a question, answer succinctly and to the point. The user prefers to ask follow up questions, over having to distill the answer from an initial long response.
 
             ## Showing pictures and diagrams
 
@@ -346,5 +346,5 @@ def agent():
 
 
 if __name__ == "__main__":
-    demo = chat_ui(agent, conversation_list=conversation_list())
+    demo = chat_ui(agent, conversation_list=conversation_list(), title="Research Agent")
     demo.queue(default_concurrency_limit=5).launch(inbrowser=True)

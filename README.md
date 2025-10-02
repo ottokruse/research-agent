@@ -70,7 +70,7 @@ graph TD
 
 - Python 3.13+
 - [Uv](https://github.com/astral-sh/uv) (Python package installer, recommended)
-- Amazon Bedrock access for Large Language Model access (currently using Claude 4 Sonnet; switching to [one of the other models supported by Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html) just requires a one line change [here](/main.py))
+- Amazon Bedrock access for Large Language Model access (currently using Claude Sonnet 4.5; switching to [one of the other models supported by Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html) just requires a one line change [here](/main.py))
 - Brave Search API key
   - You can use the default Brave search plan, which requires a CC registered but is free of charge
 - GitHub token
