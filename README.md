@@ -18,22 +18,6 @@ You can chat with the agent using the UI:
 
 <img src="./assets/amsterdam-food.gif" alt="Video of UI" style="max-width: 1000px; width: 100%;">
 
-### Screen shots
-
-<img src="./assets/chat-screenshot.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
-
-Expand the subagent to see all the web URLs it consulted:
-
-<img src="./assets/chat-screenshot-subagent-detail.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
-
-Expand the tool invocation to see exactly what the tool returned to the agent:
-
-<img src="./assets/chat-screenshot-tool-detail.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
-
-The [Gradio](https://www.gradio.app/) based UI is perfectly capable of rendering Markdown with mermaid diagrams or images:
-
-<img src="./assets/chat-screenshot-cat.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
-
 ## Multi-agent approach
 
 The agent consists of a supervisor agent that is great in coding itself, and can hand off tasks to its subagents:
@@ -69,6 +53,22 @@ graph TD
     class Orchestrator,WebAgent,FilesAgent agentClass
     class Think,WebSearch,FetchHTML,FetchGitHubFile,ListGitHubFolder,FetchGitHubNotebook,FetchPRDataYaml,WriteFile,ReadFile,WriteFileLocal,ReadFileLocal,ListDir,GitTree,InspectGitChanges toolClass
 ```
+
+## Screen shots
+
+<img src="./assets/chat-screenshot.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
+
+Expand the subagent to see all the web URLs it consulted:
+
+<img src="./assets/chat-screenshot-subagent-detail.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
+
+Expand the tool invocation to see exactly what the tool returned to the agent:
+
+<img src="./assets/chat-screenshot-tool-detail.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
+
+The [Gradio](https://www.gradio.app/) based UI is perfectly capable of rendering Markdown with mermaid diagrams or images:
+
+<img src="./assets/chat-screenshot-cat.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
 
 ## Requirements
 
