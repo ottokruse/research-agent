@@ -16,6 +16,10 @@ Built with [Generative AI Toolkit](https://github.com/awslabs/generative-ai-tool
 
 You can chat with the agent using the UI:
 
+<img src="./assets/amsterdam-food.gif" alt="Video of UI" style="max-width: 1000px; width: 100%;">
+
+### Screen shots
+
 <img src="./assets/chat-screenshot.png" alt="UI Screenshot" style="max-width: 1000px; width: 100%;">
 
 Expand the subagent to see all the web URLs it consulted:
