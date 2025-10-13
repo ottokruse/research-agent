@@ -341,10 +341,18 @@ def agent():
 
     orchestrator_agent.register_tool(web_research_agent)
     orchestrator_agent.register_tool(local_files_agent)
-
     return orchestrator_agent
 
 
 if __name__ == "__main__":
-    demo = chat_ui(agent, conversation_list=conversation_list(), title="Research Agent")
+    import webbrowser
+    
+    # Check if Chrome is available on macOS
+    chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    if os.path.exists(chrome_path):
+        # Register Chrome as preferred browser
+        chrome = webbrowser.Chrome(chrome_path)
+        webbrowser.register('chrome', None, chrome, preferred=True)
+    
+    demo = chat_ui(agent, conversation_list=conversation_list, title="Research Agent")
     demo.queue(default_concurrency_limit=5).launch(inbrowser=True)

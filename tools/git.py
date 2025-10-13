@@ -51,6 +51,8 @@ def get_git_tracked_tree(path: str) -> List[Dict[str, Any]]:
             if k == "__files__":
                 for f in v:
                     file_path = BASE_DIR / base / f
+                    if not file_path.exists():
+                        continue
                     items.append(
                         {
                             "path": str(pathlib.Path(base) / f),
@@ -90,6 +92,7 @@ def inspect_git_changes(
     include_commits : int, optional
         Number of recent commits to include. If None (default), shows all commits
         on current branch that are not yet on main. Set to 0 to skip commits entirely.
+        When on the main branch itself, no commits are shown by default.
     include_staged : bool
         Whether to include staged changes (default: True)
     include_unstaged : bool
@@ -126,9 +129,10 @@ def inspect_git_changes(
         if include_commits is None:
             # Default: show all commits on current branch not on main
             if branch_name == "main":
-                # If we're on main, show recent commits
-                commit_range = "-10"
-                commit_description = "recent commits (on main branch)"
+                # If we're on main, don't show any commits by default
+                # Users only want to see staged/unstaged changes when on main
+                commit_range = None
+                commit_description = "no commits (on main branch)"
             else:
                 # Check if main branch exists
                 subprocess.check_output(
@@ -141,53 +145,55 @@ def inspect_git_changes(
             commit_range = f"-{include_commits}"
             commit_description = f"last {include_commits} commits"
 
-        if show_diff:
-            commit_cmd = [
-                "git",
-                "log",
-                commit_range,
-                "--pretty=format:COMMIT_START%nHash: %H%nAuthor: %an <%ae>%nDate: %ad%nSubject: %s%nCOMMIT_DIFF_START",
-                "--date=iso",
-                "-p",  # Include patch/diff
-            ]
-        else:
-            commit_cmd = [
-                "git",
-                "log",
-                commit_range,
-                "--pretty=format:Hash: %H%nAuthor: %an <%ae>%nDate: %ad%nSubject: %s%n---",
-            ]
+        # Only fetch commits if we have a valid commit_range
+        if commit_range is not None:
+            if show_diff:
+                commit_cmd = [
+                    "git",
+                    "log",
+                    commit_range,
+                    "--pretty=format:COMMIT_START%nHash: %H%nAuthor: %an <%ae>%nDate: %ad%nSubject: %s%nCOMMIT_DIFF_START",
+                    "--date=iso",
+                    "-p",  # Include patch/diff
+                ]
+            else:
+                commit_cmd = [
+                    "git",
+                    "log",
+                    commit_range,
+                    "--pretty=format:Hash: %H%nAuthor: %an <%ae>%nDate: %ad%nSubject: %s%n---",
+                ]
 
-        commits_output = subprocess.check_output(
-            commit_cmd, text=True, stderr=subprocess.PIPE
-        )
+            commits_output = subprocess.check_output(
+                commit_cmd, text=True, stderr=subprocess.PIPE
+            )
 
-        if show_diff:
-            # Parse commits with diffs
-            commits = commits_output.split("COMMIT_START\n")[
-                1:
-            ]  # Skip first empty split
-            for commit in commits:
-                if "COMMIT_DIFF_START\n" in commit:
-                    header, diff = commit.split("COMMIT_DIFF_START\n", 1)
-                    commit_info = {}
-                    for line in header.strip().split("\n"):
-                        if ": " in line:
-                            key, value = line.split(": ", 1)
-                            commit_info[key.lower()] = value
-                    commit_info["diff"] = diff.strip()
-                    result["committed_changes"].append(commit_info)
-        else:
-            # Parse simple commit list
-            for commit_block in commits_output.split("---\n"):
-                if commit_block.strip():
-                    commit_info = {}
-                    for line in commit_block.strip().split("\n"):
-                        if ": " in line:
-                            key, value = line.split(": ", 1)
-                            commit_info[key.lower()] = value
-                    if commit_info:
+            if show_diff:
+                # Parse commits with diffs
+                commits = commits_output.split("COMMIT_START\n")[
+                    1:
+                ]  # Skip first empty split
+                for commit in commits:
+                    if "COMMIT_DIFF_START\n" in commit:
+                        header, diff = commit.split("COMMIT_DIFF_START\n", 1)
+                        commit_info = {}
+                        for line in header.strip().split("\n"):
+                            if ": " in line:
+                                key, value = line.split(": ", 1)
+                                commit_info[key.lower()] = value
+                        commit_info["diff"] = diff.strip()
                         result["committed_changes"].append(commit_info)
+            else:
+                # Parse simple commit list
+                for commit_block in commits_output.split("---\n"):
+                    if commit_block.strip():
+                        commit_info = {}
+                        for line in commit_block.strip().split("\n"):
+                            if ": " in line:
+                                key, value = line.split(": ", 1)
+                                commit_info[key.lower()] = value
+                        if commit_info:
+                            result["committed_changes"].append(commit_info)
 
         # Add metadata about what commits were shown
         result["branch_info"]["commits_shown"] = commit_description
@@ -218,6 +224,7 @@ def inspect_git_changes(
 
     # Get unstaged changes
     if include_unstaged:
+        # Get modified tracked files
         if show_diff:
             unstaged_diff = subprocess.check_output(
                 ["git", "diff"], text=True, stderr=subprocess.PIPE
@@ -231,9 +238,26 @@ def inspect_git_changes(
                 ["git", "diff", "--name-only"], text=True, stderr=subprocess.PIPE
             ).strip()
 
+        # Get untracked files (new files not yet added to git)
+        untracked_files = subprocess.check_output(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            text=True,
+            stderr=subprocess.PIPE,
+        ).strip()
+
+        # Combine modified and untracked files
+        all_files = []
+        if unstaged_files:
+            all_files.extend(unstaged_files.split("\n"))
+        if untracked_files:
+            # Add untracked files with "??" prefix to match git status format
+            for f in untracked_files.split("\n"):
+                all_files.append(f"??\t{f}")
+
         result["unstaged_changes"] = {
-            "files": unstaged_files.split("\n") if unstaged_files else [],
+            "files": all_files,
             "diff": unstaged_diff if show_diff else "Diff not requested",
+            "note": "Includes both modified tracked files and untracked files (marked with ??)",
         }
 
     # Generate summary

@@ -11,10 +11,11 @@ Built with [Generative AI Toolkit](https://github.com/awslabs/generative-ai-tool
 - Review GitHub pull requests
 - Review local code repositories
 - Analyze (and fix) bugs; not just your own, feel free to make it analyze (perceived) bugs in your dependencies too. The agent will happily dig through their source code on GitHub
+- Understand how to use poorly documented open-source solutions. The agent will happily dig through their source code on GitHub.
 
 ## Chat UI
 
-You can chat with the agent using the UI:
+You command the agent using the chat UI (best use **_Chrome_**! FireFox doesn't like chats with a lot of messages):
 
 <img src="./assets/amsterdam-food.gif" alt="Video of UI" style="max-width: 1000px; width: 100%;">
 

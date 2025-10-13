@@ -30,9 +30,12 @@ def fetch_github_file(repo_url: str, file_path: str, branch: str | None = None) 
 
     user, repo = match.groups()
     api_url = f"https://api.github.com/repos/{user}/{repo}"
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if "GITHUB_TOKEN" in os.environ:
+        headers["Authorization"] = f'token {os.environ["GITHUB_TOKEN"]}'
 
     if branch is None:
-        resp = requests.get(api_url)
+        resp = requests.get(api_url, headers=headers)
         if resp.status_code != 200:
             raise ValueError(
                 f"Unable to fetch repo metadata: HTTP {resp.status_code}, {resp.text}"
@@ -40,7 +43,7 @@ def fetch_github_file(repo_url: str, file_path: str, branch: str | None = None) 
         branch = resp.json().get("default_branch", "main")
 
     raw_url = f"https://raw.githubusercontent.com/{user}/{repo}/{branch}/{file_path}"
-    resp = requests.get(raw_url)
+    resp = requests.get(raw_url, headers=headers)
 
     if resp.status_code != 200:
         raise ValueError(
@@ -71,9 +74,15 @@ def list_github_folder(
     if not match:
         raise ValueError(f"Invalid GitHub repo URL: {repo_url}")
 
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if "GITHUB_TOKEN" in os.environ:
+        headers["Authorization"] = f'token {os.environ["GITHUB_TOKEN"]}'
+
     user, repo = match.groups()
     if branch is None:
-        meta_resp = requests.get(f"https://api.github.com/repos/{user}/{repo}")
+        meta_resp = requests.get(
+            f"https://api.github.com/repos/{user}/{repo}", headers=headers
+        )
         if meta_resp.status_code != 200:
             raise ValueError(
                 f"Unable to fetch repo metadata: {meta_resp.status_code}, {meta_resp.text}"
@@ -81,7 +90,7 @@ def list_github_folder(
         branch = meta_resp.json().get("default_branch", "main")
 
     api_url = f"https://api.github.com/repos/{user}/{repo}/contents/{folder_path}?ref={branch}"
-    resp = requests.get(api_url)
+    resp = requests.get(api_url, headers=headers)
 
     if resp.status_code != 200:
         raise ValueError(
@@ -120,11 +129,15 @@ def fetch_github_notebook(
     if not file_path.endswith(".ipynb"):
         raise ValueError(f"File must be a Jupyter notebook (.ipynb): {file_path}")
 
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if "GITHUB_TOKEN" in os.environ:
+        headers["Authorization"] = f'token {os.environ["GITHUB_TOKEN"]}'
+
     user, repo = match.groups()
     api_url = f"https://api.github.com/repos/{user}/{repo}"
 
     if branch is None:
-        resp = requests.get(api_url)
+        resp = requests.get(api_url, headers=headers)
         if resp.status_code != 200:
             raise ValueError(
                 f"Unable to fetch repo metadata: HTTP {resp.status_code}, {resp.text}"
@@ -132,7 +145,7 @@ def fetch_github_notebook(
         branch = resp.json().get("default_branch", "main")
 
     raw_url = f"https://raw.githubusercontent.com/{user}/{repo}/{branch}/{file_path}"
-    resp = requests.get(raw_url)
+    resp = requests.get(raw_url, headers=headers)
 
     if resp.status_code != 200:
         raise ValueError(
