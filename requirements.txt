@@ -1,4 +1,4 @@
-generative-ai-toolkit[all]>=0.20.0
+generative-ai-toolkit[all]>=0.22.0
 requests
 beautifulsoup4
 markdownify
