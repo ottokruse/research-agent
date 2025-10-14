@@ -1,14 +1,18 @@
+import functools
 import re
 
 import requests
 from bs4 import BeautifulSoup
 from generative_ai_toolkit.agent import registry
+from generative_ai_toolkit.context import AgentContext
 from markdownify import markdownify
 
 from tools.registries import web_research
 
-# Global session object to maintain cookies across requests
-_session = requests.Session()
+
+@functools.lru_cache(25)
+def get_session(principal_id: str, conversation_id: str):
+    return requests.Session()
 
 
 def _clean_html(html: str):
@@ -65,9 +69,13 @@ def fetch_html(url: str, page: int = 1, format: str = "md"):
         "Sec-Ch-Ua-Platform": '"Windows"',
     }
 
+    context = AgentContext.current()
     try:
-        # Use the session object to maintain cookies across requests
-        response = _session.get(url, headers=headers, allow_redirects=True)
+
+        session = get_session(
+            context.auth_context["principal_id"], context.conversation_id
+        )
+        response = session.get(url, headers=headers, allow_redirects=True, timeout=30.0)
         content_type = response.headers.get("Content-Type", "")
 
         # Improved content type checking - use regex to match base content type
