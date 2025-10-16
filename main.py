@@ -169,6 +169,14 @@ def agent():
             - Do NOT write files to "make information available" - users can ask for files if they want them
             - If you have retrieved information that could be useful as a file, display it in your response and ask "Would you like me to save this to a file?" only if it seems the user might want to work with it locally
 
+            ## Using the read_file tool
+
+            Only read files you do not yet know the contents of:
+            - If you have not read the file before
+            - If there is an explicit indication that the file has (/may have) changed since you last read it (e.g. when the user says they made a change to it)
+
+            If you just wrote the file yourself using the write_file tool, the contents will of course be as you wrote them, and you don't need to read the file again.
+
             ## Using the think tool
 
             Before taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to:
@@ -306,6 +314,14 @@ def agent():
             ## File access
             
             Unless the user give you a path to a file, do not presume the existence of files. Rather use your tools to understand which files are present, before accessing them.
+
+            ## Using the read_file tool
+
+            Only read files you do not yet know the contents of:
+            - If you have not read the file before
+            - If there is an explicit indication that the file has (/may have) changed since you last read it (e.g. when the user says they made a change to it)
+
+            If you just wrote the file yourself using the write_file tool, the contents will of course be as you wrote them, and you don't need to read the file again.            
             """
         )
         .strip()
@@ -346,13 +362,13 @@ def agent():
 
 if __name__ == "__main__":
     import webbrowser
-    
+
     # Check if Chrome is available on macOS
     chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     if os.path.exists(chrome_path):
         # Register Chrome as preferred browser
         chrome = webbrowser.Chrome(chrome_path)
-        webbrowser.register('chrome', None, chrome, preferred=True)
-    
+        webbrowser.register("chrome", None, chrome, preferred=True)
+
     demo = chat_ui(agent, conversation_list=conversation_list, title="Research Agent")
     demo.queue(default_concurrency_limit=5).launch(inbrowser=True)

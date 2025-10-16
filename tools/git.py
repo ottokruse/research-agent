@@ -1,6 +1,7 @@
 # tools/git_inspect.py
 
 import pathlib
+import shlex
 import subprocess
 from typing import Any, Dict, List
 
@@ -273,3 +274,148 @@ def inspect_git_changes(
     }
 
     return result
+
+
+@registry.tool(tool_registry=local_files)
+def execute_git_command(command: str) -> Dict[str, Any]:
+    """
+    Execute an arbitrary git command safely and return the output.
+
+    This tool allows you to run any git command that might not be covered by
+    the other specialized git tools. The command is executed in the current
+    working directory with proper error handling.
+
+    **Command Parsing**
+    
+    This tool uses shell-style parsing (`shlex.split()`) to properly handle:
+    - Quoted arguments with spaces
+    - Escaped characters
+    - Complex format strings
+    - Search patterns with spaces
+    
+    This means you can use standard shell quoting conventions in your commands.
+
+    **Supported Commands - Simple:**
+    
+    Basic git operations work as expected:
+        - "git status"
+        - "git branch"
+        - "git log --oneline -5"
+        - "git diff --stat"
+        - "git log --all --oneline --graph -5"
+
+    **Supported Commands - With Quotes:**
+    
+    Commands with quoted arguments now work correctly:
+        - 'git log --pretty=format:"%H %s" -1'
+          (Shows commit hash and subject with space separator)
+        
+        - 'git log --grep="Initial commit" --oneline'
+          (Search for commits with "Initial commit" in message)
+        
+        - 'git log --pretty=format:"%an <%ae>" -3'
+          (Shows author name and email in specific format)
+        
+        - 'git commit -m "Fix bug in parser"'
+          (Commit with message containing spaces)
+    
+    **Quoting Guidelines:**
+    
+    1. Use double quotes for arguments containing spaces:
+       - 'git log --pretty=format:"%H %s"'
+       - 'git log --grep="bug fix"'
+    
+    2. You can use single quotes in the outer command string:
+       - 'git log --pretty=format:"%H"' (outer single, inner double)
+    
+    3. Escape special characters if needed:
+       - 'git log --pretty=format:"%H\\"'  (include literal quote)
+    
+    4. Arguments without spaces don't need quotes:
+       - "git log --format=%h -3"
+       - "git log --author=John"
+
+    **Edge Cases:**
+    
+    - Empty arguments: Use empty quotes if needed: 'git commit --allow-empty -m ""'
+    - Special characters: Shell-style escaping works: 'git log --grep="fix\\(bug\\)"'
+    - Multiple spaces: Preserved inside quotes: 'git commit -m "Fix  double  spaces"'
+
+    Parameters
+    ----------
+    command : str
+        The full git command to execute, including "git" prefix.
+        Supports shell-style quoting for complex arguments.
+        
+        Examples:
+            - "git log --oneline -5"
+            - 'git log --pretty=format:"%H %s" -1'
+            - 'git log --grep="Initial commit"'
+            - "git diff HEAD~1 HEAD"
+            - 'git commit -m "My commit message"'
+    
+    Returns
+    -------
+    Dict[str, Any]
+        A dictionary containing:
+        - success (bool): True if returncode was 0
+        - stdout (str): Standard output from the command
+        - stderr (str): Standard error from the command
+        - returncode (int): The command's return code
+    
+    Examples
+    --------
+    >>> execute_git_command("git status")
+    {'success': True, 'stdout': 'On branch main...', 'stderr': '', 'returncode': 0}
+    
+    >>> execute_git_command('git log --pretty=format:"%H %s" -1')
+    {'success': True, 'stdout': 'abc123 Fixed parser bug', 'stderr': '', 'returncode': 0}
+    
+    >>> execute_git_command('git log --grep="Initial commit" --oneline')
+    {'success': True, 'stdout': 'abc123 Initial commit', 'stderr': '', 'returncode': 0}
+    """
+    # Use shlex.split() for proper shell-style parsing
+    try:
+        cmd_parts = shlex.split(command)
+    except ValueError as e:
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": f"Failed to parse command: {str(e)}",
+            "returncode": -1,
+        }
+
+    # Validate command starts with "git"
+    if not cmd_parts or cmd_parts[0] != "git":
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": "Command must start with 'git'",
+            "returncode": -1,
+        }
+
+    # Execute the command
+    try:
+        result = subprocess.run(
+            cmd_parts,
+            cwd=BASE_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode,
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": f"Exception occurred: {str(e)}",
+            "returncode": -1,
+        }
